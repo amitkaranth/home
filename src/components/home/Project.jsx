@@ -13,42 +13,44 @@ const dummyProject = {
   languages_url: null,
   pushed_at: null,
 };
+
 const API = "https://api.github.com";
-// const gitHubQuery = "/repos?sort=updated&direction=desc";
-// const specficQuerry = "https://api.github.com/repos/hashirshoaeb/";
 
 const Project = ({ heading, username, length, specfic }) => {
-  const allReposAPI = `${API}/users/${username}/repos?sort=updated&direction=desc`;
+  // NOTE: We intentionally do NOT use the "all repos" API anymore.
+  // Only fetch repositories explicitly listed in `specfic`.
   const specficReposAPI = `${API}/repos/${username}`;
-  const dummyProjectsArr = new Array(length + specfic.length).fill(
-    dummyProject
-  );
+
+  const specificList = Array.isArray(specfic) ? specfic : [];
+  const dummyProjectsArr = new Array(specificList.length).fill(dummyProject);
 
   const [projectsArray, setProjectsArray] = useState([]);
 
   const fetchRepos = useCallback(async () => {
-    let repoList = [];
     try {
-      // getting all repos
-      const response = await axios.get(allReposAPI);
-      // slicing to the length
-      repoList = [...response.data.slice(0, length)];
-      // adding specified repos
-      try {
-        for (let repoName of specfic) {
-          const response = await axios.get(`${specficReposAPI}/${repoName}`);
-          repoList.push(response.data);
-        }
-      } catch (error) {
-        console.error(error.message);
-      }
-      // setting projectArray
-      // TODO: remove the duplication.
+      // Fetch ONLY the repos you listed, preserving order.
+      const responses = await Promise.all(
+        specificList.map(async (repoName) => {
+          try {
+            const res = await axios.get(`${specficReposAPI}/${repoName}`);
+            return res.data;
+          } catch (error) {
+            console.error(`Failed to fetch repo "${repoName}":`, error.message);
+            return null; // keep slot failure from crashing the whole section
+          }
+        })
+      );
+
+      // Drop failed fetches (nulls). If you prefer showing placeholders for failures,
+      // we can keep nulls and render a special "Unavailable" card instead.
+      const repoList = responses.filter(Boolean);
+
       setProjectsArray(repoList);
     } catch (error) {
       console.error(error.message);
+      setProjectsArray([]);
     }
-  }, [allReposAPI, length, specfic, specficReposAPI]);
+  }, [specficReposAPI, specificList]);
 
   useEffect(() => {
     fetchRepos();
@@ -61,19 +63,19 @@ const Project = ({ heading, username, length, specfic }) => {
         <Row>
           {projectsArray.length
             ? projectsArray.map((project, index) => (
-              <ProjectCard
-                key={`project-card-${index}`}
-                id={`project-card-${index}`}
-                value={project}
-              />
-            ))
+                <ProjectCard
+                  key={`project-card-${index}`}
+                  id={`project-card-${index}`}
+                  value={project}
+                />
+              ))
             : dummyProjectsArr.map((project, index) => (
-              <ProjectCard
-                key={`dummy-${index}`}
-                id={`dummy-${index}`}
-                value={project}
-              />
-            ))}
+                <ProjectCard
+                  key={`dummy-${index}`}
+                  id={`dummy-${index}`}
+                  value={project}
+                />
+              ))}
         </Row>
       </Container>
     </Jumbotron>
